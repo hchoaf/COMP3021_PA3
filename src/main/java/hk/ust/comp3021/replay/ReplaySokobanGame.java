@@ -9,6 +9,7 @@ import hk.ust.comp3021.game.InputEngine;
 import hk.ust.comp3021.game.RenderingEngine;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
@@ -64,6 +65,10 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     protected final RenderingEngine renderingEngine;
 
+    protected final List<Semaphore> semaphores;
+
+    protected final int actionCount;
+
     /**
      * Create a new instance of ReplaySokobanGame.
      * Each input engine corresponds to an action file and will produce actions from the action file.
@@ -88,6 +93,14 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         this.frameRate = frameRate;
         this.renderingEngine = renderingEngine;
         this.inputEngines = inputEngines;
+
+
+        this.actionCount = inputEngines.size();
+        //added semaphore list
+        this.semaphores = new ArrayList<>();
+        for (int i = 0; i<actionCount; i++) {
+            semaphores.add(new Semaphore(0));
+        }
     }
 
     /**
@@ -132,15 +145,21 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
             // TODO: modify this method to implement the requirements.
 
             while (!shouldStop()) {
-                synchronized (InputEngineRunnable.class) {
+                try {
+                    semaphores.get(index).acquire();
                     final var action = inputEngine.fetchAction();
                     System.out.printf("%s : %s%n", index, action);
                     final var result = processAction(action);
                     if (result instanceof ActionResult.Failed failed) {
                         renderingEngine.message(failed.getReason());
                     }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    semaphores.get((index+1)%actionCount).release();
                 }
             }
+
 
         }
     }
@@ -178,15 +197,17 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     @Override
     public void run() {
-
-        Thread newThread = new Thread(new InputEngineRunnable(0, inputEngines.get(0)));
-        Thread newThread2 = new Thread(new InputEngineRunnable(1, inputEngines.get(1)));
-        // Thread renderingThread = new Thread(new RenderingEngineRunnable());
-
-
-        newThread.start();
-        newThread2.start();
+        // TODO
+        Thread[] inputEngineThreads = new Thread[actionCount];
+        for (int i = 0; i<actionCount; i++) {
+            inputEngineThreads[i] = new Thread(new InputEngineRunnable(i, inputEngines.get(i)));
+        }
+        for (int i = 0; i<actionCount; i++) {
+            inputEngineThreads[i].start();
+        }
+        semaphores.get(0).release();
         // renderingThread.start();
+
 
 
         if (this.mode == Mode.FREE_RACE) {
@@ -197,8 +218,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
         }
 
-        
-        // TODO
     }
 
 }
