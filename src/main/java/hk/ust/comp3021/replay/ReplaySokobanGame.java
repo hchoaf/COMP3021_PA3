@@ -10,6 +10,7 @@ import hk.ust.comp3021.game.RenderingEngine;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 import static hk.ust.comp3021.utils.StringResources.*;
 
@@ -72,7 +73,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      * @param gameState       The game state.
      * @param inputEngines    the input engines.
      * @param renderingEngine the rendering engine.
-     * @throws IllegalArgumentException when there are more than two players in the map.
      */
     public ReplaySokobanGame(
             @NotNull Mode mode,
@@ -130,13 +130,18 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         @Override
         public void run() {
             // TODO: modify this method to implement the requirements.
+
             while (!shouldStop()) {
-                final var action = inputEngine.fetchAction();
-                final var result = processAction(action);
-                if (result instanceof ActionResult.Failed failed) {
-                    renderingEngine.message(failed.getReason());
+                synchronized (InputEngineRunnable.class) {
+                    final var action = inputEngine.fetchAction();
+                    System.out.printf("%s : %s%n", index, action);
+                    final var result = processAction(action);
+                    if (result instanceof ActionResult.Failed failed) {
+                        renderingEngine.message(failed.getReason());
+                    }
                 }
             }
+
         }
     }
 
@@ -173,6 +178,26 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     @Override
     public void run() {
+
+        Thread newThread = new Thread(new InputEngineRunnable(0, inputEngines.get(0)));
+        Thread newThread2 = new Thread(new InputEngineRunnable(1, inputEngines.get(1)));
+        // Thread renderingThread = new Thread(new RenderingEngineRunnable());
+
+
+        newThread.start();
+        newThread2.start();
+        // renderingThread.start();
+
+
+        if (this.mode == Mode.FREE_RACE) {
+            System.out.println("free race");
+        } else if (this.mode == Mode.ROUND_ROBIN) {
+
+            System.out.println("round robin");
+
+        }
+
+        
         // TODO
     }
 
