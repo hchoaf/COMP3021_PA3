@@ -12,6 +12,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static hk.ust.comp3021.utils.StringResources.*;
 
@@ -65,9 +67,11 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     protected final RenderingEngine renderingEngine;
 
-    protected final List<Semaphore> semaphores;
+    protected int numInputEngines = 0;
+    protected final AtomicInteger nextIndex = new AtomicInteger(0);
 
-    protected final int actionCount;
+    protected final ReentrantLock freeRaceLock = new ReentrantLock(false);
+
 
     /**
      * Create a new instance of ReplaySokobanGame.
@@ -93,14 +97,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         this.frameRate = frameRate;
         this.renderingEngine = renderingEngine;
         this.inputEngines = inputEngines;
-
-
-        this.actionCount = inputEngines.size();
-        //added semaphore list
-        this.semaphores = new ArrayList<>();
-        for (int i = 0; i<actionCount; i++) {
-            semaphores.add(new Semaphore(0));
-        }
     }
 
     /**
@@ -138,6 +134,7 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         private InputEngineRunnable(int index, @NotNull InputEngine inputEngine) {
             this.index = index;
             this.inputEngine = inputEngine;
+            numInputEngines++;
         }
 
         @Override
@@ -145,18 +142,34 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
             // TODO: modify this method to implement the requirements.
 
             while (!shouldStop()) {
+
                 try {
-                    semaphores.get(index).acquire();
+                    if (mode == Mode.ROUND_ROBIN) {
+                        synchronized (nextIndex) {
+                            while (nextIndex.get() != index) {
+                                nextIndex.wait();
+                            }
+                        }
+                    } else if (mode == Mode.FREE_RACE) {
+                        freeRaceLock.lock();
+                    }
                     final var action = inputEngine.fetchAction();
                     System.out.printf("%s : %s%n", index, action);
                     final var result = processAction(action);
                     if (result instanceof ActionResult.Failed failed) {
                         renderingEngine.message(failed.getReason());
                     }
+                    if (mode == Mode.ROUND_ROBIN) {
+                        synchronized (nextIndex) {
+                            nextIndex.set((nextIndex.get() + 1) % numInputEngines);
+                            nextIndex.notifyAll();
+                        }
+                    } else if (mode == Mode.FREE_RACE) {
+                        freeRaceLock.unlock();
+                    }
+
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
-                } finally {
-                    semaphores.get((index+1)%actionCount).release();
                 }
             }
 
@@ -198,25 +211,34 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
     @Override
     public void run() {
         // TODO
-        Thread[] inputEngineThreads = new Thread[actionCount];
-        for (int i = 0; i<actionCount; i++) {
-            inputEngineThreads[i] = new Thread(new InputEngineRunnable(i, inputEngines.get(i)));
-        }
-        for (int i = 0; i<actionCount; i++) {
-            inputEngineThreads[i].start();
-        }
-        semaphores.get(0).release();
-        // renderingThread.start();
-
-
-
         if (this.mode == Mode.FREE_RACE) {
             System.out.println("free race");
         } else if (this.mode == Mode.ROUND_ROBIN) {
-
             System.out.println("round robin");
-
         }
+        var threads = new ArrayList<Thread>();
+        var index = 0;
+        for (InputEngine inputEngine : inputEngines) {
+            var thread = new Thread(new InputEngineRunnable(index, inputEngine));
+            threads.add(thread);
+            index++;
+        }
+
+        for (var thread : threads) {
+            thread.start();
+        }
+
+        for (var thread : threads) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        Thread renderingEngine = new Thread(new RenderingEngineRunnable());
+        renderingEngine.start();
+
 
     }
 

@@ -43,7 +43,7 @@ class ReplaySokobanGameTest {
         }
     }
 
-    @DisplayName("Game's run method should spwan one thread for each input engine")
+    @DisplayName("Game's run method should spawn one thread for each input engine")
     @Test
     @Tag(TestKind.PUBLIC)
     void testInputEngineThread() {
