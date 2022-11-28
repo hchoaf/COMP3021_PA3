@@ -1,6 +1,7 @@
 package hk.ust.comp3021.replay;
 
 
+import hk.ust.comp3021.actions.Action;
 import hk.ust.comp3021.actions.ActionResult;
 import hk.ust.comp3021.actions.Exit;
 import hk.ust.comp3021.game.AbstractSokobanGame;
@@ -9,9 +10,13 @@ import hk.ust.comp3021.game.InputEngine;
 import hk.ust.comp3021.game.RenderingEngine;
 import org.jetbrains.annotations.NotNull;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -71,6 +76,12 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
     protected final AtomicInteger nextIndex = new AtomicInteger(0);
 
     protected final ReentrantLock freeRaceLock = new ReentrantLock(false);
+
+    // protected final AtomicBoolean exitFlag = new AtomicBoolean(false);
+
+    private static final long SLEEP_PRECISION = TimeUnit.MILLISECONDS.toNanos(2);
+
+    private static final long NANOSEC = 1_000_000_000;
 
 
     /**
@@ -153,12 +164,20 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                     } else if (mode == Mode.FREE_RACE) {
                         freeRaceLock.lock();
                     }
+                    /*if (exitFlag.get()) {
+                        System.out.printf("%s ........ %n", index);
+                        break;
+                    }*/
                     final var action = inputEngine.fetchAction();
                     System.out.printf("%s : %s%n", index, action);
                     final var result = processAction(action);
                     if (result instanceof ActionResult.Failed failed) {
                         renderingEngine.message(failed.getReason());
                     }
+                    /*if (action instanceof Exit) {
+                        exitFlag.set(true);
+                        break;
+                    }*/
                     if (mode == Mode.ROUND_ROBIN) {
                         synchronized (nextIndex) {
                             nextIndex.set((nextIndex.get() + 1) % numInputEngines);
@@ -172,8 +191,7 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                     throw new RuntimeException(e);
                 }
             }
-
-
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -192,14 +210,66 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
          */
         @Override
         public void run() {
+
             // TODO: modify this method to implement the requirements.
             do {
                 final var undoQuotaMessage = state.getUndoQuota()
-                    .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
-                    .orElse(UNDO_QUOTA_UNLIMITED);
+                        .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
+                        .orElse(UNDO_QUOTA_UNLIMITED);
                 renderingEngine.message(undoQuotaMessage);
                 renderingEngine.render(state);
+                try {
+                    sleepNanos(NANOSEC / frameRate);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+               /* if (exitFlag.get()) {
+                    break;
+                }*/
+
             } while (!shouldStop());
+
+        }
+    }
+
+    private static void sleepNanos (long nanoDuration) throws InterruptedException {
+        final long endTime = System.nanoTime() + nanoDuration;
+        long timeLeft = nanoDuration;
+        do {
+            if (timeLeft > SLEEP_PRECISION) {
+                Thread.sleep(1);
+            } else {
+                Thread.yield();
+            }
+            timeLeft = endTime - System.nanoTime();
+        } while (timeLeft > 0);
+    }
+
+    private class DummyRenderingEngine implements Runnable {
+        public static int count = 3;
+        @Override
+        public void run() {
+            do {
+                System.out.println("=====Rendering Engine Print======");
+                try {
+                    sleepNanos(NANOSEC/frameRate);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                count--;
+            } while (count > 0);
+
+            System.out.println("=====Rendering Engine Final Print======");
+        }
+    }
+
+    private class DummyInputEngine implements Runnable {
+        @Override
+        public void run() {
+            do {
+                System.out.println("Dummy Input Engine Running");
+            } while (DummyRenderingEngine.count > 0);
+
         }
     }
 
@@ -210,25 +280,45 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     @Override
     public void run() {
-        // TODO
-        if (this.mode == Mode.FREE_RACE) {
-            System.out.println("free race");
-        } else if (this.mode == Mode.ROUND_ROBIN) {
-            System.out.println("round robin");
+/*
+
+        Instant start = Instant.now();
+        Thread dummyRenderingEngineThread = new Thread(new DummyRenderingEngine());
+        Thread dummyInputEngineThread = new Thread(new DummyInputEngine());
+        dummyRenderingEngineThread.setPriority(Thread.MAX_PRIORITY);
+        dummyRenderingEngineThread.start();
+        dummyInputEngineThread.start();
+
+        try {
+            dummyRenderingEngineThread.join();
+            dummyInputEngineThread.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
-        var threads = new ArrayList<Thread>();
+        Instant finish = Instant.now();
+        System.out.println(Duration.between(start, finish).toMillis());
+        System.out.printf("Actual:%d %n", 10000 / this.frameRate);
+
+*/
+
+
+        var inputEngineThreads = new ArrayList<Thread>();
         var index = 0;
         for (InputEngine inputEngine : inputEngines) {
             var thread = new Thread(new InputEngineRunnable(index, inputEngine));
-            threads.add(thread);
+            inputEngineThreads.add(thread);
             index++;
         }
 
-        for (var thread : threads) {
+        for (var thread : inputEngineThreads) {
             thread.start();
         }
 
-        for (var thread : threads) {
+        Thread renderingEngineThread = new Thread(new RenderingEngineRunnable());
+        renderingEngineThread.setPriority(Thread.MAX_PRIORITY);
+        renderingEngineThread.start();
+
+        for (var thread : inputEngineThreads) {
             try {
                 thread.join();
             } catch (InterruptedException e) {
@@ -236,8 +326,15 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
             }
         }
 
-        Thread renderingEngine = new Thread(new RenderingEngineRunnable());
-        renderingEngine.start();
+        try {
+            for (var thread : inputEngineThreads) {
+                thread.join();
+            }
+            renderingEngineThread.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
 
 
     }

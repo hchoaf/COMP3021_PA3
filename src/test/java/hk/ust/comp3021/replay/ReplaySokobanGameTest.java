@@ -196,6 +196,7 @@ class ReplaySokobanGameTest {
         assertTrue(renderTimes.size() > 0);
         final var timeElapsed = renderTimes.get(renderTimes.size() - 1).getTime() - renderTimes.get(0).getTime();
         final var expected = (float) timeElapsed / 1000 * fps;
+        System.out.printf("%d elapsed. %f expected %n", renderTimes.size(), expected);
         assertEquals(expected, renderTimes.size(), (float) (expected * 0.1)); // 10% error tolerance
     }
 }
