@@ -19,6 +19,7 @@ class ReplaySokobanGameTest {
     @DisplayName("Game's run method should spawn a new thread for rendering engine")
     @Test
     @Tag(TestKind.PUBLIC)
+    @RepeatedTest(10)
     void testRenderingEngineThread() {
         final var gameState = mock(GameState.class);
         final var inputEngine = mock(InputEngine.class);
@@ -46,6 +47,7 @@ class ReplaySokobanGameTest {
     @DisplayName("Game's run method should spawn one thread for each input engine")
     @Test
     @Tag(TestKind.PUBLIC)
+    @RepeatedTest(10)
     void testInputEngineThread() {
         final var gameState = mock(GameState.class);
         final var inputEngine0 = mock(InputEngine.class);
@@ -103,6 +105,7 @@ class ReplaySokobanGameTest {
     @DisplayName("Moves from the same input engine should be processed in the same order (multiple input engine)")
     @Test
     @Tag(TestKind.PUBLIC)
+    @RepeatedTest(10)
     void testMovesOrderMultiple() {
         final var gameState = mock(GameState.class);
         final var inputEngine0 = mock(StreamInputEngine.class);
@@ -129,6 +132,7 @@ class ReplaySokobanGameTest {
     @DisplayName("Action order should be enforced in ROUND_ROBIN mode (all input engines have same length of actions")
     @Test
     @Tag(TestKind.PUBLIC)
+    @RepeatedTest(10)
     void testRoundRobinModeEqualLength() {
         final var gameState = mock(GameState.class);
         final var inputEngine0 = mock(StreamInputEngine.class);
@@ -170,6 +174,7 @@ class ReplaySokobanGameTest {
     @Test
     @Timeout(5)
     @Tag(TestKind.PUBLIC)
+    @RepeatedTest(10)
     void testFPS() {
         final var fps = 50;
         final var gameState = mock(GameState.class);
