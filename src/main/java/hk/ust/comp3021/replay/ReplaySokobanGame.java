@@ -125,6 +125,11 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
     // TODO: add any method or field you need.
 
+    @Override
+    protected boolean shouldStop() {
+        return this.state.isWin();
+    }
+
     /**
      * The implementation of the Runnable for each input engine thread.
      * Each input engine should run in a separate thread.
@@ -179,11 +184,10 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                             }
                             exitFlag = true;
                             System.out.printf("Action-%s : Thread-%s : Exit triggered. Current Exit Count: %s%n", index, Thread.currentThread().getId(), exitCount);
-                        } else {
-                            final var result = processAction(action);
-                            if (result instanceof ActionResult.Failed failed) {
-                                renderingEngine.message(failed.getReason());
-                            }
+                        }
+                        final var result = processAction(action);
+                        if (result instanceof ActionResult.Failed failed) {
+                            renderingEngine.message(failed.getReason());
                         }
                     }
 
@@ -249,6 +253,13 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                 }
 
             } while (!shouldStop());
+
+            System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
+            final var undoQuotaMessage = state.getUndoQuota()
+                    .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
+                    .orElse(UNDO_QUOTA_UNLIMITED);
+            renderingEngine.message(undoQuotaMessage);
+            renderingEngine.render(state);
 
         }
     }
@@ -345,17 +356,16 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         for (var thread : inputEngineThreads) {
             thread.start();
         }
-/*
         Thread renderingEngineThread = new Thread(new RenderingEngineRunnable());
         renderingEngineThread.setPriority(Thread.MAX_PRIORITY);
-        renderingEngineThread.start();*/
+        renderingEngineThread.start();
 
 
         try {
             for (var thread : inputEngineThreads) {
                 thread.join();
             }
-    /*        renderingEngineThread.join();*/
+            renderingEngineThread.join();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
