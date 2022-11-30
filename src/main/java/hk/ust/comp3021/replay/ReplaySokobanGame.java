@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -73,7 +74,7 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
     protected final ReentrantLock freeRaceLock = new ReentrantLock(false);
 
-
+    protected final AtomicBoolean checkFirst = new AtomicBoolean(false);
 
 
     protected final AtomicInteger exitCount = new AtomicInteger(0);
@@ -157,11 +158,18 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         @Override
         public void run() {
             // TODO: modify this method to implement the requirements.
+            synchronized (checkFirst) {
+                while (!checkFirst.get()) {
+                    try {
+                        checkFirst.wait();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
 
             while (!shouldStop() && (exitCount.get() != numInputEngines)) {
                 try {
-
-
                     if (mode == Mode.ROUND_ROBIN) {
                         synchronized (nextIndex) {
                             while (nextIndex.get() != index) {
@@ -172,11 +180,8 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                         freeRaceLock.lock();
                     }
 
-                    // if
                     if (!exitFlag) {
                         final var action = inputEngine.fetchAction();
-                        // System.out.printf("Action-%s : Thread-%s : %s%n", index, Thread.currentThread().getId(), action);
-                        // if action is instance of Exit, it should not be processed, because processing it will trigger shouldStop() = true
                         if (action instanceof Exit) {
                             synchronized (exitCount) {
                                 exitCount.getAndIncrement();
@@ -230,14 +235,18 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
             // TODO: modify this method to implement the requirements.
             do {
-
-                // System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
                 synchronized (state) {
                     final var undoQuotaMessage = state.getUndoQuota()
                             .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
                             .orElse(UNDO_QUOTA_UNLIMITED);
                     renderingEngine.message(undoQuotaMessage);
                     renderingEngine.render(state);
+                }
+                synchronized (checkFirst) {
+                    if (!checkFirst.get()) {
+                        checkFirst.set(true);
+                        checkFirst.notifyAll();
+                    }
                 }
                 try {
                     sleepNanos(NANO_SEC / frameRate);
@@ -253,7 +262,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
             } while (!shouldStop());
 
-            // System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
             final var undoQuotaMessage = state.getUndoQuota()
                     .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
                     .orElse(UNDO_QUOTA_UNLIMITED);
