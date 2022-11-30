@@ -1,7 +1,6 @@
 package hk.ust.comp3021.replay;
 
 
-
 import hk.ust.comp3021.actions.ActionResult;
 import hk.ust.comp3021.actions.Exit;
 import hk.ust.comp3021.game.AbstractSokobanGame;
@@ -10,16 +9,14 @@ import hk.ust.comp3021.game.InputEngine;
 import hk.ust.comp3021.game.RenderingEngine;
 import org.jetbrains.annotations.NotNull;
 
-
 import java.util.ArrayList;
 import java.util.List;
-
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static hk.ust.comp3021.utils.StringResources.*;
+import static hk.ust.comp3021.utils.StringResources.UNDO_QUOTA_TEMPLATE;
+import static hk.ust.comp3021.utils.StringResources.UNDO_QUOTA_UNLIMITED;
 
 /**
  * A thread-safe Sokoban game.
@@ -76,7 +73,8 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
     protected final ReentrantLock freeRaceLock = new ReentrantLock(false);
 
-    protected final ReentrantLock enginesLock = new ReentrantLock(false);
+
+
 
     protected final AtomicInteger exitCount = new AtomicInteger(0);
 
@@ -162,7 +160,7 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
 
             while (!shouldStop() && (exitCount.get() != numInputEngines)) {
                 try {
-                    // enginesLock.lock();
+
 
                     if (mode == Mode.ROUND_ROBIN) {
                         synchronized (nextIndex) {
@@ -173,21 +171,23 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                     } else if (mode == Mode.FREE_RACE) {
                         freeRaceLock.lock();
                     }
+
                     // if
                     if (!exitFlag) {
                         final var action = inputEngine.fetchAction();
-                        System.out.printf("Action-%s : Thread-%s : %s%n", index, Thread.currentThread().getId(), action);
+                        // System.out.printf("Action-%s : Thread-%s : %s%n", index, Thread.currentThread().getId(), action);
                         // if action is instance of Exit, it should not be processed, because processing it will trigger shouldStop() = true
                         if (action instanceof Exit) {
                             synchronized (exitCount) {
                                 exitCount.getAndIncrement();
                             }
                             exitFlag = true;
-                            System.out.printf("Action-%s : Thread-%s : Exit triggered. Current Exit Count: %s%n", index, Thread.currentThread().getId(), exitCount);
                         }
-                        final var result = processAction(action);
-                        if (result instanceof ActionResult.Failed failed) {
-                            renderingEngine.message(failed.getReason());
+                        synchronized (state) {
+                            final var result = processAction(action);
+                            if (result instanceof ActionResult.Failed failed) {
+                                renderingEngine.message(failed.getReason());
+                            }
                         }
                     }
 
@@ -203,9 +203,9 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                         freeRaceLock.unlock();
                     }
 
-                    /*enginesLock.unlock();*/
 
                 }
+
             }
 
         }
@@ -227,21 +227,19 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         @Override
         public void run() {
 
+
             // TODO: modify this method to implement the requirements.
             do {
 
-               /* enginesLock.lock();*/
-
-                System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
-                final var undoQuotaMessage = state.getUndoQuota()
-                        .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
-                        .orElse(UNDO_QUOTA_UNLIMITED);
-                renderingEngine.message(undoQuotaMessage);
-                renderingEngine.render(state);
+                // System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
+                synchronized (state) {
+                    final var undoQuotaMessage = state.getUndoQuota()
+                            .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
+                            .orElse(UNDO_QUOTA_UNLIMITED);
+                    renderingEngine.message(undoQuotaMessage);
+                    renderingEngine.render(state);
+                }
                 try {
-
-       /*             enginesLock.unlock();*/
-
                     sleepNanos(NANO_SEC / frameRate);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
@@ -252,9 +250,10 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
                     }
                 }
 
+
             } while (!shouldStop());
 
-            System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
+            // System.out.printf("Rendering Engine : Thread-%s %n", Thread.currentThread().getId());
             final var undoQuotaMessage = state.getUndoQuota()
                     .map(it -> String.format(UNDO_QUOTA_TEMPLATE, it))
                     .orElse(UNDO_QUOTA_UNLIMITED);
@@ -277,45 +276,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         } while (timeLeft > 0);
     }
 
-    private class DummyRenderingEngine implements Runnable {
-        public static int count = 3;
-        @Override
-        public void run() {
-            do {
-                System.out.println("=====Rendering Engine Print======");
-                try {
-                    sleepNanos(NANO_SEC/frameRate);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                count--;
-            } while (count > 0);
-
-            System.out.println("=====Rendering Engine Final Print======");
-        }
-    }
-
-    private class DummyInputEngine implements Runnable {
-        private int count = 5;
-        @Override
-        public void run() {
-
-
-            do {
-                try {
-                    freeRaceLock.lock();
-                    System.out.printf("Thread-%s, count: %d %n", Thread.currentThread().getId(), count);
-                    count--;
-                    if (count < 2) {
-                        break;
-                    }
-                } finally {
-                    freeRaceLock.unlock();
-                }
-            } while (count > 0);
-
-        }
-    }
 
     /**
      * Start the game.
@@ -324,26 +284,6 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
      */
     @Override
     public void run() {
-        /*
-
-        Instant start = Instant.now();
-        Thread dummyRenderingEngineThread = new Thread(new DummyRenderingEngine());
-        Thread dummyInputEngineThread = new Thread(new DummyInputEngine());
-        dummyRenderingEngineThread.setPriority(Thread.MAX_PRIORITY);
-        dummyRenderingEngineThread.start();
-        dummyInputEngineThread.start();
-
-        try {
-            dummyRenderingEngineThread.join();
-            dummyInputEngineThread.join();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        Instant finish = Instant.now();
-        System.out.println(Duration.between(start, finish).toMillis());
-        System.out.printf("Actual:%d %n", 10000 / this.frameRate);
-
-*/
 
         var inputEngineThreads = new ArrayList<Thread>();
         var index = 0;
@@ -356,16 +296,16 @@ public class ReplaySokobanGame extends AbstractSokobanGame {
         for (var thread : inputEngineThreads) {
             thread.start();
         }
-        Thread renderingEngineThread = new Thread(new RenderingEngineRunnable());
-        renderingEngineThread.setPriority(Thread.MAX_PRIORITY);
-        renderingEngineThread.start();
+        Thread renderingThread = new Thread(new RenderingEngineRunnable());
+        renderingThread.setPriority(Thread.MAX_PRIORITY);
+        renderingThread.start();
 
 
         try {
             for (var thread : inputEngineThreads) {
                 thread.join();
             }
-            renderingEngineThread.join();
+            renderingThread.join();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }

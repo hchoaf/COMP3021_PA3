@@ -1,11 +1,20 @@
 package hk.ust.comp3021.replay;
 
-import hk.ust.comp3021.actions.*;
-import hk.ust.comp3021.game.*;
+import hk.ust.comp3021.actions.Action;
+import hk.ust.comp3021.actions.Exit;
+import hk.ust.comp3021.actions.Move;
+import hk.ust.comp3021.actions.Undo;
+import hk.ust.comp3021.game.GameState;
+import hk.ust.comp3021.game.InputEngine;
+import hk.ust.comp3021.game.RenderingEngine;
 import hk.ust.comp3021.utils.TestKind;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,6 +47,79 @@ class PersonalReplaySokobanGameTest {
         while (!renderThreadIds.isEmpty()) {
             assertEquals(renderThreadId, renderThreadIds.poll());
         }
+    }
+
+    @DisplayName("RenderingEngine run should be called at least once in the beginning.")
+    @Tag(TestKind.PUBLIC)
+    @RepeatedTest(50)
+    void testRenderingEngineFirst() {
+        final var gameState = mock(GameState.class);
+        final var inputEngine0 = mock(InputEngine.class);
+        final var inputEngine1 = mock(InputEngine.class);
+        final var renderingEngine = mock(RenderingEngine.class);
+        final var game = new TestGame(gameState, List.of(inputEngine0, inputEngine1), renderingEngine);
+        final var threadIds = new ConcurrentLinkedQueue<Long>();
+        final var renderThreadIds = new ConcurrentLinkedQueue<Long>();
+        doAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            renderThreadIds.add(threadID);
+            return null;
+        }).when(renderingEngine).render(any());
+
+        final var actionProducer0 = new RandomlyPausedActionProducer(new Move.Right(0), new Move.Left(0), new Move.Up(0), new Undo(0), new Exit(), new Move.Left(0));
+        final var actionProducer1 = new RandomlyPausedActionProducer(new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Exit());
+
+        when(inputEngine0.fetchAction()).thenAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            return actionProducer0.produce();
+        });
+        when(inputEngine1.fetchAction()).thenAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            return actionProducer1.produce();
+        });
+        game.run();
+
+        assertTrue(renderThreadIds.size() > 0);
+        assertEquals(renderThreadIds.poll(), threadIds.poll());
+    }
+
+    @DisplayName("RenderingEngine run should be called at least once in the end.")
+    @Tag(TestKind.PUBLIC)
+    @RepeatedTest(50)
+    void testRenderingEngineLast() {
+        final var gameState = mock(GameState.class);
+        final var inputEngine0 = mock(InputEngine.class);
+        final var inputEngine1 = mock(InputEngine.class);
+        final var renderingEngine = mock(RenderingEngine.class);
+        final var game = new TestGame(gameState, List.of(inputEngine0, inputEngine1), renderingEngine);
+        final var threadIds = new ConcurrentLinkedDeque<Long>();
+        final var renderThreadIds = new ConcurrentLinkedDeque<Long>();
+        doAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            renderThreadIds.add(threadID);
+            return null;
+        }).when(renderingEngine).render(any());
+
+        final var actionProducer0 = new RandomlyPausedActionProducer(new Move.Right(0), new Move.Left(0), new Move.Up(0), new Undo(0), new Exit(), new Move.Left(0));
+        final var actionProducer1 = new RandomlyPausedActionProducer(new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Move.Right(1), new Exit());
+
+        when(inputEngine0.fetchAction()).thenAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            return actionProducer0.produce();
+        });
+        when(inputEngine1.fetchAction()).thenAnswer(invocation -> {
+            final var threadID = Thread.currentThread().getId();
+            threadIds.add(threadID);
+            return actionProducer1.produce();
+        });
+        game.run();
+        assertTrue(renderThreadIds.size() > 0);
+        assertEquals(renderThreadIds.poll(), threadIds.getLast());
     }
 
     @DisplayName("Game's run method should spawn one thread for each input engine")

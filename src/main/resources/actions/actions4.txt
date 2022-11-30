@@ -1,9 +1,9 @@
 0
-H
 L
 H
 L
 L
-L
-L
+H
+H
+H
 E

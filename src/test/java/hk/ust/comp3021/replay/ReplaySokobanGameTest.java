@@ -1,10 +1,18 @@
 package hk.ust.comp3021.replay;
 
-import hk.ust.comp3021.actions.*;
-import hk.ust.comp3021.game.*;
+import hk.ust.comp3021.actions.Action;
+import hk.ust.comp3021.actions.ActionResult;
+import hk.ust.comp3021.actions.Exit;
+import hk.ust.comp3021.actions.Move;
+import hk.ust.comp3021.game.GameState;
+import hk.ust.comp3021.game.InputEngine;
+import hk.ust.comp3021.game.RenderingEngine;
 import hk.ust.comp3021.utils.TestKind;
 import org.jetbrains.annotations.NotNull;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -17,7 +25,6 @@ import static org.mockito.Mockito.*;
 class ReplaySokobanGameTest {
 
     @DisplayName("Game's run method should spawn a new thread for rendering engine")
-    @Test
     @Tag(TestKind.PUBLIC)
     @RepeatedTest(10)
     void testRenderingEngineThread() {
@@ -45,7 +52,6 @@ class ReplaySokobanGameTest {
     }
 
     @DisplayName("Game's run method should spawn one thread for each input engine")
-    @Test
     @Tag(TestKind.PUBLIC)
     @RepeatedTest(10)
     void testInputEngineThread() {
@@ -103,7 +109,6 @@ class ReplaySokobanGameTest {
     }
 
     @DisplayName("Moves from the same input engine should be processed in the same order (multiple input engine)")
-    @Test
     @Tag(TestKind.PUBLIC)
     @RepeatedTest(10)
     void testMovesOrderMultiple() {
@@ -130,7 +135,6 @@ class ReplaySokobanGameTest {
     }
 
     @DisplayName("Action order should be enforced in ROUND_ROBIN mode (all input engines have same length of actions")
-    @Test
     @Tag(TestKind.PUBLIC)
     @RepeatedTest(10)
     void testRoundRobinModeEqualLength() {
@@ -171,7 +175,6 @@ class ReplaySokobanGameTest {
     }
 
     @DisplayName("FPS parameter should specify the times render method is invoked per second")
-    @Test
     @Timeout(5)
     @Tag(TestKind.PUBLIC)
     @RepeatedTest(10)

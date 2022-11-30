@@ -1,10 +1,13 @@
 package hk.ust.comp3021.replay;
 
-import hk.ust.comp3021.actions.*;
+import hk.ust.comp3021.actions.Action;
+import hk.ust.comp3021.actions.Exit;
+import hk.ust.comp3021.actions.Move;
+import hk.ust.comp3021.actions.Undo;
 import hk.ust.comp3021.game.InputEngine;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.*;
+import java.io.InputStream;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
